@@ -1,0 +1,114 @@
+# Javascript Node CircleCI 2.0 configuration file
+#
+# Check https://circleci.com/docs/2.0/language-javascript/ for more details
+
+defaults: &defaults
+  working_directory: ~/repo
+  docker:
+    - image: circleci/node:16.13.0
+
+tag_matcher: &tag_matcher
+  tags:
+    only: /^v.*/
+  branches:
+    ignore: /.*/
+
+version: 2
+jobs:
+  test:
+    <<: *defaults
+
+    steps:
+      - checkout
+
+      # Download and cache dependencies
+      - restore_cache:
+          keys:
+            - v1-dependencies-{{ checksum "yarn.lock" }}
+
+      - run:
+          name: "Install dependencies"
+          command: yarn install
+
+      - save_cache:
+          paths:
+            - node_modules
+          key: v1-dependencies-{{ checksum "yarn.lock" }}
+
+      - run:
+          name: "Lint project"
+          command: yarn lint --format junit -o reports/eslint/results.xml
+
+      - run:
+          name: "Run tests"
+          environment:
+            JEST_JUNIT_OUTPUT_FILE: reports/jest/results.xml
+          command: yarn test --runInBand --ci --reporters=default --reporters=jest-junit
+
+      - store_test_results:
+          path: reports/
+
+      - store_artifacts:
+          path: reports/
+
+      - persist_to_workspace:
+          root: ~/repo
+          paths: .
+
+  build:
+    <<: *defaults
+
+    steps:
+      - attach_workspace:
+          at: ~/repo
+
+      - run: yarn build
+
+      - persist_to_workspace:
+          root: ~/repo
+          paths: .
+
+  deploy:
+    <<: *defaults
+
+    steps:
+      - attach_workspace:
+          at: ~/repo
+      - run:
+          name: Authenticate with registry
+          command: echo "//registry.npmjs.org/:_authToken=$NPM_TOKEN" > ~/repo/.npmrc
+      - run:
+          name: Release/Publish to github and npm
+          command: echo "publish"
+          # command: yarn publish
+
+workflows:
+  version: 2
+  test-build:
+    jobs:
+      - test
+      - build:
+          requires:
+            - test
+
+  test-build-and-publish:
+    jobs:
+      - test:
+          filters:
+            <<: *tag_matcher
+      - build:
+          requires:
+            - test
+          filters:
+            <<: *tag_matcher
+      # - approve-deployment:
+      #     type: approval
+      #     requires:
+      #       - build
+      #     filters:
+      #       <<: *tag_matcher
+      - deploy:
+          requires:
+            - build
+          filters:
+            <<: *tag_matcher
