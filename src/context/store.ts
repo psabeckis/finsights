@@ -20,11 +20,11 @@ const INITIAL_EXECUTION_ID = 1;
 const executionIdStore = new AsyncLocalStorage<number>();
 const continuousStorage = new AsyncLocalStorage<StoreMap>();
 
-function createStoreSlice<S>(slice: S): StoreSlice<S> {
+function createStoreSlice<S extends Record<string, unknown>>(slice: S): StoreSlice<S> {
   return {
     get: () => slice,
     set: (newData: Partial<S>) => {
-      Object.assign(slice, newData);
+      Object.assign(slice as S, newData);
     },
   };
 }
@@ -33,12 +33,12 @@ function createStore() {
   const data: Record<string, Anything> = {};
 
   return {
-    useSlice: <S>(sliceName: string, defaultValue: S) => {
+    useSlice: <S extends Record<string, unknown>>(sliceName: string, defaultValue: S) => {
       if (!data[sliceName]) data[sliceName] = defaultValue;
 
       return createStoreSlice<S>(data[sliceName]);
     },
-    getSlice: <S>(sliceName: string) => createStoreSlice<S>(data[sliceName]),
+    getSlice: <S extends Record<string, unknown>>(sliceName: string) => createStoreSlice<S>(data[sliceName]),
     ...createStoreSlice(data),
   };
 }
